@@ -2,6 +2,13 @@
 
 A lightweight, containerized dashboard built for resource-efficient management of self-hosted services. Designed for deployment on vintage hardware (Compaq) with a focus on Infrastructure as Code (IaC) principles.
 
+## 📚 Documentation
+For detailed system administration and recovery procedures, refer to the included playbooks:
+* [Infrastructure Map & Startup Sequencing](docs/infrastructure-map.md)
+* [Docker Compose Blueprint](docs/docker-compose-blueprint.md)
+* [Disaster Recovery Playbook](docs/disaster-recovery-playbook.md)
+* [Secrets Management](docs/secrets-and-configuration-management.md)
+
 ## 🏗️ Architecture Diagram
 
 ```mermaid
@@ -18,23 +25,28 @@ graph TD
         Nextcloud[Nextcloud Vault]
         Speedtest[Speedtest Tracker]
         Vaultwarden[Vaultwarden Password Manager]
+	Pihole[Pi-hole DNS Sinkhole]
     end
     
     subgraph Storage
         USB[64GB USB Vault]
+	GCloud[Google Drive]
     end
 
     User -- Port 80/443 --> Homepage
     User -- Secure HTTPS Port 443 --> TS_Serve
+    User -- DNS Port 53 --> Pihole
     TS_Serve -- Proxy Pass --> Vaultwarden
     
     Homepage -- API --> Glances
     Homepage -- Proxy --> Nextcloud
     Homepage -- API --> Speedtest
     Homepage -- Link --> Vaultwarden
-    
+    Homepage -- API --> Pihole
+
     Nextcloud -- Volume Mount --> USB
-    Vaultwarden -- SQLite Backups --> USB
+    Vaultwarden -- Volume Mount --> USB
+    USB -- backup.sh / rclone rcat --> GCloud
 ```
 
 ## 🚀 Features
@@ -42,7 +54,8 @@ graph TD
 * **Infrastructure as Code:** Fully deployable stack using Docker Compose.
 * **Secure Access:** Network layer secured via Tailscale, sensitive configurations handled via environment variables.
 * **Automated Analytics:** Continuous background network monitoring and historical bandwidth graphing via Speedtest Tracker.
-* **Custom UI:** Tailored CSS for a cohesive, modern user experience.
+* **Network-Wide Ad Blocking:** Pi-hole intercepts telemetry and malicious domains at the DNS level.
+* **Zero-Storage Backups:** Custom `backup.sh` streams compressed volume archives directly to Google Drive via `rclone`, bypassing limited local disk space.
 * **Zero-Knowledge Password Management:** Self-hosted Vaultwarden instance syncing encrypted passwords securely across client devices.
 
 ## 🛠️ Tech Stack
@@ -52,12 +65,13 @@ graph TD
 * **Connectivity:** Tailscale
 * **Network Analytics:** Speedtest Tracker
 * **Credential Management:** Vaultwarden (Rust-based Bitwarden API implementation)
+* **DNS & Ad-Blocking:** Pi-hole
+* **Backup Streaming:** Rclone
 
 ## ⚙️ Deployment
 1. Clone the repository:
 ```bash
-git clone https://github.com/TingRongYou/SelfHostedCommandCenter.git
-cd SelfHostedCommandCenter
+git clone https://github.com/TingRongYou/self-hosted-command-center.git
 ```
 2. Configure Secrets:
 Copy the example and populate your environment variables:
@@ -70,7 +84,9 @@ Ensure MagicDNS and HTTPS Certificates are enabled in your Tailscale Admin Conso
 ```bash
 sudo tailscale serve --bg http://127.0.0.1:8083
 ```
-4. Deploy:
+4. Configure Startup Dependencies:
+Ensure the custom `systemd` override is applied so Docker waits for the USB mount, preventing local storage exhaustion. (See Infrastructure Map documentation)
+5. Deploy:
 ```bash
 sudo docker compose up -d
 ```

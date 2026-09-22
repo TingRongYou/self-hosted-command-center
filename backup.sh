@@ -1,30 +1,27 @@
 #!/bin/bash
 
-sudo docker stop vaultwarden
+# Enforce running the script as root to prevent timeouts
+if [ "$EUID" -ne 0 ]; then
+  echo "Error: Please run this script using sudo (sudo ./backup.sh)"
+  exit 1
+fi
 
 # Define variables
 DATE=$(date +"%Y-%m-%d")
-BACKUP_FILE="/tmp/server_backup_$DATE.tar.gz"
-SOURCE_DIR="/mnt/usb_vault"
+BACKUP_FILENAME="server_backup_$DATE.tar.gz"
 GDRIVE_DEST="gdrive:5. Server Backup"
 
 echo "Starting backup process..."
 
-# 1. Stop the Docker containers safely so files don't change during the backup
-sudo docker stop nextcloud_vault homepage glances
+# 1. Stop the entire Docker stack safely so files don't change during the backup
+cd /home/tingrongyou/dashboard-project
+docker compose stop
 
-# 2. Compress the entire USB vault into a single archive
-sudo tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
+# 2. Compress and stream directly to Google Drize (Zero local storage used)
+echo "Streaming backup directly to Google Drive..."
+tar -czf - /mnt/usb_vault /home/tingrongyou/dashboard-project | rclone --config /home/tingrongyou/.config/rclone/rclone.conf rcat "$GDRIVE_DEST/$BACKUP_FILENAME"
 
-# 3. Restart the Docker containers immediately
-sudo docker start nextcloud_vault homepage glances
+# 3. Bring the server back online
+docker compose up -d
 
-# 4. Upload the archive to Google Drive silently
-rclone --config /home/tingrongyou/.config/rclone/rclone.conf copy "$BACKUP_FILE" "$GDRIVE_DEST"
-
-# 5. Delete the local archive to save space on the server
-sudo rm "$BACKUP_FILE"
-
-echo "Backup complete and uploaded to Google Drive!"
-
-sudo docker start vaultwarden
+echo "Backup stream complete and uploaded to Google Drive!"

@@ -28,3 +28,5 @@ nextcloud_db/
 html/
 speedtest/
 
+rescue_config.php
+
